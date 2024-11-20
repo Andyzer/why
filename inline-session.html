@@ -26,10 +26,9 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
     <meta name='mobile-web-app-capable' content='yes'>
     <meta name='apple-mobile-web-app-capable' content='yes'>
     <link rel='icon' type='image/png' sizes='32x32' href='favicon-32x32.png'>
-    <link rel='icon' type='image/png' sizes='96x96' href='favicon-96x96.png'>
     <link rel='stylesheet' href='css/common.css'>
 
-    <title>Inline Session</title>
+    <title>Inline Session with VR and AR</title>
   </head>
   <body>
     <header>
@@ -95,7 +94,11 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
       }
       fov.addEventListener('change', updateFov);
 
+      // Just a test
+
       // XR globals.
+      // Neu TJ
+      let xrButtonNeu = null;
       let xrButton = null;
       let xrImmersiveRefSpace = null;
       let xrInlineRefSpace = null;
@@ -106,19 +109,40 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
       let scene = new Scene();
       let solarSystem = new Gltf2Node({url: 'media/gltf/space/space.gltf'});
       scene.addNode(solarSystem);
-      scene.addNode(new SkyboxNode({url: 'media/textures/milky-way-4k.png'}));
+      // Neu TJ
+      let skybox = new SkyboxNode({url: 'media/textures/milky-way-4k.png'});
+      scene.addNode(skybox);
+      let arStartedNeu;
 
       function initXR() {
+        // Neu TJ
+        xrButtonNeu = new WebXRButton({
+              onRequestSession: onRequestSessionNeu,
+              onEndSession: onEndSession,
+              textEnterXRTitle: "START AR",
+              textXRNotFoundTitle: "AR NOT FOUND",
+             textExitXRTitle: "EXIT  AR",
+        });
+        document.querySelector('header').appendChild(xrButtonNeu.domElement);
+
         xrButton = new WebXRButton({
           onRequestSession: onRequestSession,
           onEndSession: onEndSession
-        });
+        })
+
         document.querySelector('header').appendChild(xrButton.domElement);
+
+        if (navigator.xr) {
+          // Neu TJ
+          navigator.xr.isSessionSupported('immersive-ar').then((supported) => {
+                xrButtonNeu.enabled = supported;
+          });
 
         if (navigator.xr) {
           navigator.xr.isSessionSupported('immersive-vr').then((supported) => {
             xrButton.enabled = supported;
           });
+
 
           // Start up an inline session, which should always be supported on
           // browsers that support WebXR regardless of the available hardware.
@@ -129,8 +153,21 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
           });
         }
       }
+    }
 
-      function onRequestSession() {
+      // Neu TJ
+      function onRequestSessionNeu() {
+            return navigator.xr.requestSession('immersive-ar').then((session) => {
+                xrButtonNeu.setSession(session);
+               // Set a flag on the session so we can differentiate it from the
+               // inline session.
+               session.isImmersive = true;
+               arStartedNeu = true;
+               onSessionStarted(session);
+           });
+        }
+
+        function onRequestSession() {
         return navigator.xr.requestSession('immersive-vr').then((session) => {
           xrButton.setSession(session);
           // Set a flag on the session so we can differentiate it from the
@@ -188,6 +225,16 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
           // which XRReferenceSpace is associated with which XRSession.
           if (session.isImmersive) {
             xrImmersiveRefSpace = refSpace;
+
+            // Neu TJ
+            xrImmersiveRefSpace.addEventListener('reset', (evt) => {
+              if (evt.transform) {
+                // AR experiences typically should stay grounded to the real world.
+                // If there's a known origin shift, compensate for it here.
+                xrImmersiveRefSpace = xrImmersiveRefSpace.getOffsetReferenceSpace(evt.transform);
+              }
+            });
+
           } else {
             xrInlineRefSpace = refSpace;
           }
@@ -216,8 +263,13 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
         // Account for the click-and-drag mouse movement or touch movement when
         // calculating the viewer pose for inline sessions.
-        if (!session.isImmersive) {
-          refSpace = getAdjustedRefSpace(refSpace);
+        
+        
+        // Neu TJ
+        if (session.isImmersive && arStartedNeu) {
+          // When in 'immersive-ar' mode don't draw an opaque background because
+          // we want the real world to show through.
+          skybox.visible = false;
         }
 
         let pose = frame.getViewerPose(refSpace);
